@@ -1,0 +1,90 @@
+name: Compile Android APK
+
+on:
+  push:
+    branches: [ master, NET10 ]
+  pull_request:
+    branches: [ master ]
+  release:
+     types: 
+       - published
+       - prereleased
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # Настройка Java (необходима для сборки Android)
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'microsoft'
+        java-version: '17'
+
+    # Настройка .NET
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        # Если .NET 10 еще в превью, версия может потребоваться явная или использование global.json
+        global-json-file: global.json 
+       
+    # Установка рабочей нагрузки Android
+    - name: Install Android Workload
+      run: dotnet workload install android
+
+    # Генерация временного ключа для подписи (Testsign)
+    - name: Generate Test Keystore
+      run: |
+        keytool -genkey -v -keystore test.keystore -alias testalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=Test, OU=Test, O=Test, L=Test, S=Test, C=US"
+
+    # Восстановление зависимостей
+    - name: Restore dependencies
+      run: dotnet restore -r android-arm64 GalaxyBudsClient.Android/GalaxyBudsClient.Android.csproj
+
+    # Сборка и подпись APK
+    # Используем сгенерированный выше ключ
+    - name: Build Android APK (Signed)
+      run: |
+        dotnet publish GalaxyBudsClient.Android/GalaxyBudsClient.Android.csproj \
+        -f net10.0-android36.1 \
+        -r android-arm64 \
+        -c Release \
+        -p:AndroidPackageFormats=apk \
+        -p:AndroidKeyStore=true \
+        -p:AndroidSigningKeyStore=test.keystore \
+        -p:AndroidSigningKeyAlias=testalias \
+        -p:AndroidSigningKeyPass=password \
+        -p:AndroidSigningStorePass=password \
+        --no-restore
+
+    # Загрузка артефакта для использования в следующем шаге или скачивания
+    # Путь поиска файла *-Signed.apk гарантирует, что мы берем именно подписанный файл
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: GalaxyBudsClient_Android_arm64
+        path: GalaxyBudsClient.Android/bin/Release/net10.0-android36.1/android-arm64/publish/*-Signed.apk
+
+  attach-to-release:
+    runs-on: ubuntu-latest
+    needs: [build-android]
+    if: github.event_name == 'release'
+     
+    steps:
+    - name: Download artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: GalaxyBudsClient_Android_arm64
+    
+    # Переименование файла в красивый вид для релиза
+    - name: Rename APK
+      run: mv *-Signed.apk GalaxyBudsClient_Android_arm64.apk
+
+    - uses: AButler/upload-release-assets@v3.0
+      with:
+        files: '*.apk'
+        repo-token: ${{ secrets.GH_TOKEN }}
