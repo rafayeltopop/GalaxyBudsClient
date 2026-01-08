@@ -32,7 +32,6 @@ jobs:
     - name: Install Android Workload
       run: dotnet workload install android
 
-    # Генерируем ключ в корне рабочей директории
     - name: Generate Test Keystore
       run: |
         keytool -genkey -v -keystore test.keystore -alias testalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=Test, OU=Test, O=Test, L=Test, S=Test, C=US"
@@ -40,7 +39,10 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore GalaxyBudsClient.Android/GalaxyBudsClient.Android.csproj
 
-    # ИСПРАВЛЕНО: Указан полный путь к keystore: ${{ github.workspace }}/test.keystore
+    # ИСПРАВЛЕНО:
+    # 1. Точки с запятой в NoWarn заменены на %3B (IL2037%3BCS1591%3BXA0141).
+    #    Это предотвращает ошибку "Switch: CS1591".
+    # 2. Путь к keystore остался абсолютным (${{ github.workspace }}).
     - name: Build Android APK (Signed)
       run: >
         dotnet publish GalaxyBudsClient.Android/GalaxyBudsClient.Android.csproj
@@ -55,7 +57,7 @@ jobs:
         -p:AndroidSigningStorePass=password
         -p:BuildInParallel=false
         -p:TreatWarningsAsErrors=false
-        -p:NoWarn="IL2037;CS1591;XA0141"
+        -p:NoWarn=IL2037%3BCS1591%3BXA0141
         --no-restore
 
     - name: Upload artifacts
