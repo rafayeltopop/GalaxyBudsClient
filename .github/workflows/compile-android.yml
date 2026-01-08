@@ -32,6 +32,7 @@ jobs:
     - name: Install Android Workload
       run: dotnet workload install android
 
+    # Генерируем ключ в корне рабочей директории
     - name: Generate Test Keystore
       run: |
         keytool -genkey -v -keystore test.keystore -alias testalias -keyalg RSA -keysize 2048 -validity 10000 -storepass password -keypass password -dname "CN=Test, OU=Test, O=Test, L=Test, S=Test, C=US"
@@ -39,8 +40,7 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore GalaxyBudsClient.Android/GalaxyBudsClient.Android.csproj
 
-    # ИСПРАВЛЕНО: Добавлены флаги -p:TreatWarningsAsErrors=false и -p:NoWarn=IL2037
-    # Это заставляет сборщик игнорировать проблему с EntityFramework Linker
+    # ИСПРАВЛЕНО: Указан полный путь к keystore: ${{ github.workspace }}/test.keystore
     - name: Build Android APK (Signed)
       run: >
         dotnet publish GalaxyBudsClient.Android/GalaxyBudsClient.Android.csproj
@@ -49,13 +49,13 @@ jobs:
         -c Release
         -p:AndroidPackageFormats=apk
         -p:AndroidKeyStore=true
-        -p:AndroidSigningKeyStore=test.keystore
+        -p:AndroidSigningKeyStore=${{ github.workspace }}/test.keystore
         -p:AndroidSigningKeyAlias=testalias
         -p:AndroidSigningKeyPass=password
         -p:AndroidSigningStorePass=password
         -p:BuildInParallel=false
         -p:TreatWarningsAsErrors=false
-        -p:NoWarn=IL2037
+        -p:NoWarn="IL2037;CS1591;XA0141"
         --no-restore
 
     - name: Upload artifacts
